@@ -4,11 +4,11 @@ use (
 	./api-spec
 	./client
 	./common
+	./ops/backup
 	./pkg/client-sdk
 	./server
 	./server/pkg/kvdb
 	./server/pkg/macaroons
-	ops/backup
 )
 
 replace github.com/btcsuite/btcd/btcec/v2 => github.com/btcsuite/btcd/btcec/v2 v2.3.3
