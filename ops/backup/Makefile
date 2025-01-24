@@ -1,4 +1,4 @@
-PHONY: build run
+PHONY: clean run docker-build docker-run help
 
 # Image name and tag
 IMAGE_NAME ?= ark-backup
@@ -9,17 +9,39 @@ AWS_ACCESS_KEY_ID ?=
 AWS_SECRET_ACCESS_KEY ?= 
 AWS_REGION ?= eu-central-1
 S3_BUCKET_NAME ?=
+BACKUP_INTERVAL_IN_MINUTES ?= 
 
 # Volume binding options (use one of these)
 DATA_VOLUME ?= # Format: container_name:path or volume_name
 LOCAL_PATH ?= # Format: /path/to/local/directory
 
-# Build the Docker image
+## build: builds the backupd binary
 build:
+	@echo "Building binary..."
+	@go build -o build/backupd
+
+## clean: cleans go cache
+clean:
+	@echo "Cleaning..."
+	@go clean
+
+## run: runs in dev mode
+run: clean
+	@echo "Running service in dev mode..."
+	@export TARGET_DATADIR=$(LOCAL_PATH); \
+	export AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID); \
+	export AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY); \
+	export AWS_REGION=$(AWS_REGION); \
+	export S3_BUCKET_NAME=$(S3_BUCKET_NAME); \
+	export BACKUP_INTERVAL_IN_MINUTES=$(BACKUP_INTERVAL_IN_MINUTES); \
+	go run main.go
+
+## docker-build: builds the Docker image
+docker-build:
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
 
-# Run the backup container with environment variables and volume binding
-run: build
+## docker-run: runs in dev mode in Docker
+docker-run: docker-build
 	@if [ -z "$(AWS_ACCESS_KEY_ID)" ] || [ -z "$(AWS_SECRET_ACCESS_KEY)" ] || [ -z "$(S3_BUCKET_NAME)" ]; then \
 		echo "Error: Required environment variables not set"; \
 		echo "Required: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_BUCKET_NAME"; \
@@ -39,8 +61,8 @@ run: build
 			-e AWS_SECRET_ACCESS_KEY="$(AWS_SECRET_ACCESS_KEY)" \
 			-e AWS_REGION="$(AWS_REGION)" \
 			-e S3_BUCKET_NAME="$(S3_BUCKET_NAME)" \
-			-e DATA_DIR="/data" \
-			--volumes-from $(DATA_VOLUME) \
+			-e BACKUP_INTERVAL_IN_MINUTES="$(BACKUP_INTERVAL_IN_MINUTES)" \
+			-v "$(DATA_VOLUME):/data" \
 			$(IMAGE_NAME):$(IMAGE_TAG); \
 	elif [ -n "$(LOCAL_PATH)" ]; then \
 		if [ ! -d "$(LOCAL_PATH)" ]; then \
@@ -52,7 +74,7 @@ run: build
 			-e AWS_SECRET_ACCESS_KEY="$(AWS_SECRET_ACCESS_KEY)" \
 			-e AWS_REGION="$(AWS_REGION)" \
 			-e S3_BUCKET_NAME="$(S3_BUCKET_NAME)" \
-			-e DATA_DIR="/data" \
+			-e BACKUP_INTERVAL_IN_MINUTES="$(BACKUP_INTERVAL_IN_MINUTES)" \
 			-v "$(LOCAL_PATH):/data" \
 			$(IMAGE_NAME):$(IMAGE_TAG); \
 	else \
@@ -63,8 +85,7 @@ run: build
 		exit 1; \
 	fi
 
-# Help target
-.PHONY: help
+## help: help command
 help:
 	@echo "Available targets:"
 	@echo "  build              Build the Docker image"
@@ -72,10 +93,11 @@ help:
 	@echo "  help              Show this help message"
 	@echo ""
 	@echo "Environment variables:"
-	@echo "  AWS_ACCESS_KEY_ID         AWS access key (required)"
-	@echo "  AWS_SECRET_ACCESS_KEY     AWS secret key (required)"
-	@echo "  AWS_REGION               AWS region (default: us-east-1)"
-	@echo "  S3_BUCKET_NAME           S3 bucket name (required)"
+	@echo "  AWS_ACCESS_KEY_ID         	AWS access key (required)"
+	@echo "  AWS_SECRET_ACCESS_KEY     	AWS secret key (required)"
+	@echo "  AWS_REGION               	AWS region (default: us-east-1)"
+	@echo "  S3_BUCKET_NAME           	S3 bucket name (required)"
+	@echo "  BACKUP_INTERVAL_IN_MINUTES	backup interval in minutes (default: 5)"
 	@echo ""
 	@echo "Volume options (use one):"
 	@echo "  DATA_VOLUME              Container or volume to backup"
@@ -83,8 +105,8 @@ help:
 	@echo ""
 	@echo "Example usage:"
 	@echo "  make build"
-	@echo "  # Backup from another container:"
-	@echo "  make run AWS_ACCESS_KEY_ID=key AWS_SECRET_ACCESS_KEY=secret S3_BUCKET_NAME=my-bucket DATA_VOLUME=myapp:/app/data"
+	@echo "  # Backup a docker volume:"
+	@echo "  make docker-run AWS_ACCESS_KEY_ID=key AWS_SECRET_ACCESS_KEY=secret S3_BUCKET_NAME=my-bucket DATA_VOLUME=myvolume"
 	@echo ""
-	@echo "  # Backup from local directory:"
-	@echo "  make run AWS_ACCESS_KEY_ID=key AWS_SECRET_ACCESS_KEY=secret S3_BUCKET_NAME=my-bucket LOCAL_PATH=/path/to/backup"
+	@echo "  # Backup a local directory:"
+	@echo "  make docker-run AWS_ACCESS_KEY_ID=key AWS_SECRET_ACCESS_KEY=secret S3_BUCKET_NAME=my-bucket LOCAL_PATH=/path/to/backup"

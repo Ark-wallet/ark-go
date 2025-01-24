@@ -2,12 +2,10 @@ FROM golang:1.23.1 AS builder
 
 WORKDIR /app
 
-# Copy go mod files
-COPY go.mod go.sum ./
-RUN go mod download
-
 # Copy source code
 COPY . .
+
+RUN go mod download
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -o backup
@@ -24,11 +22,7 @@ COPY --from=builder /app/backup .
 RUN mkdir -p /data
 
 # Set environment variables
-ENV AWS_ACCESS_KEY_ID=""
-ENV AWS_SECRET_ACCESS_KEY=""
-ENV AWS_REGION=""
-ENV S3_BUCKET_NAME=""
-ENV DATA_DIR="/data"
+ENV TARGET_DATADIR="/data"
 
 VOLUME /data
 
